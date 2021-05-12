@@ -1,0 +1,229 @@
+Задание 4.1  
+
+SELECT a.city
+FROM dst_project.airports a
+GROUP BY a.city
+HAVING count(a.airport_code) > 1
+
+Задание 4.2
+
+Вопрос 1
+SELECT count(DISTINCT f.status)
+FROM dst_project.flights f
+
+Вопрос 2
+SELECT count(f.*)
+FROM dst_project.flights f
+WHERE f.status = 'Departed'
+
+Вопрос 3
+SELECT count(s.*)
+FROM dst_project.seats s
+JOIN dst_project.aircrafts a ON a.aircraft_code = s.aircraft_code
+WHERE a.model = 'Boeing 777-300'
+
+Вопрос 4
+SELECT count(f.*)
+FROM dst_project.flights f
+WHERE f.status = 'Arrived'
+  AND date(f.actual_arrival) BETWEEN '2017-04-01' AND '2017-09-01'
+  
+Задание 4.3
+
+Вопрос 1
+SELECT count(f.*)
+FROM dst_project.flights f
+WHERE f.status = 'Cancelled'
+
+Вопрос 2
+SELECT count(a.*)
+FROM dst_project.aircrafts a
+WHERE a.model LIKE '%Boeing%'
+
+SELECT count(a.*)
+FROM dst_project.aircrafts a
+WHERE a.model LIKE '%Sukhoi Superjet%'
+
+SELECT count(a.*)
+FROM dst_project.aircrafts a
+WHERE a.model LIKE '%Airbus%'
+
+Вопрос 3
+SELECT split_part(a.timezone, '/', 1) world_part,
+       count(a.*)
+FROM dst_project.airports a
+GROUP BY world_part
+
+
+Вопрос 4
+SELECT f.flight_id
+FROM dst_project.flights f
+WHERE f.actual_arrival IS NOT NULL
+ORDER BY (f.actual_arrival - f.scheduled_arrival) DESC
+LIMIT 1
+
+Задание 4.4
+
+Вопрос 1
+SELECT f.scheduled_departure
+FROM dst_project.flights f
+ORDER BY f.scheduled_departure
+LIMIT 1
+
+Вопрос 2
+SELECT extract(EPOCH
+               FROM (f.scheduled_arrival - f.scheduled_departure)) / 60 duration
+FROM dst_project.flights f
+ORDER BY duration DESC
+LIMIT 1
+
+Вопрос 3
+SELECT f.*
+FROM dst_project.flights f
+ORDER BY (f.scheduled_arrival - f.scheduled_departure) DESC
+LIMIT 1
+
+Вопрос 4
+SELECT avg(extract(EPOCH
+                   FROM (f.scheduled_arrival - f.scheduled_departure))) / 60
+FROM dst_project.flights f
+
+Задание 4.5
+
+Вопрос 1
+SELECT s.fare_conditions,
+       count(s.*)
+FROM dst_project.seats s
+WHERE aircraft_code = 'SU9'
+GROUP BY s.fare_conditions
+
+Вопрос 2
+SELECT b.total_amount
+FROM dst_project.bookings b
+ORDER BY b.total_amount
+LIMIT 1
+
+Вопрос 3
+SELECT b.seat_no
+FROM dst_project.boarding_passes b
+JOIN dst_project.tickets t ON t.ticket_no = b.ticket_no
+WHERE t.passenger_id = '4313 788533'
+
+Задание 5.1
+
+Вопрос 1
+SELECT count(f.*)
+FROM dst_project.flights f
+JOIN dst_project.airports a ON a.airport_code = f.arrival_airport
+WHERE f.status = 'Arrived'
+  AND a.city = 'Anapa'
+  AND extract(YEAR FROM f.actual_arrival) = 2017
+
+Вопрос 2
+SELECT count(f.*)
+FROM dst_project.flights f
+JOIN dst_project.airports a ON a.airport_code = f.departure_airport
+WHERE extract(MONTH FROM f.actual_departure) in (1,2,12)
+  AND extract(YEAR FROM f.actual_departure) = 2017
+  AND a.city = 'Anapa'
+
+Вопрос 3
+SELECT count(f.*)
+FROM dst_project.flights f
+JOIN dst_project.airports a ON a.airport_code = f.departure_airport
+WHERE f.status = 'Cancelled'
+  AND a.city = 'Anapa'
+  
+Вопрос 4
+SELECT count(f.*)
+FROM dst_project.flights f
+JOIN dst_project.airports a1 ON a1.airport_code = f.departure_airport
+JOIN dst_project.airports a2 ON a2.airport_code = f.arrival_airport
+WHERE a1.city = 'Anapa'
+  AND a2.city != 'Moscow'
+  
+Вопрос 5
+SELECT c.model
+FROM dst_project.flights f
+JOIN dst_project.airports a ON a.airport_code = f.departure_airport
+JOIN dst_project.seats s ON s.aircraft_code = f.aircraft_code
+JOIN dst_project.aircrafts c ON c.aircraft_code = s.aircraft_code
+WHERE a.city = 'Anapa'
+GROUP BY c.model
+ORDER BY count(s.*) DESC
+LIMIT 1
+
+
+ПРОЕКТ
+
+WITH airport_codes AS
+  (SELECT DISTINCT a.airport_code
+   FROM dst_project.airports a
+   WHERE a.city = 'Anapa' ),
+     flight_ids AS
+  (SELECT DISTINCT f.flight_id
+   FROM dst_project.flights f
+   WHERE f.departure_airport in
+       (SELECT airport_code
+        FROM airport_codes)
+     AND (date_trunc('month', f.scheduled_departure) in ('2017-01-01', '2017-02-01', '2017-12-01'))
+     AND f.status not in ('Cancelled') ),
+     economy_revenues AS
+  (SELECT t.flight_id,
+          sum(t.amount) amount,
+          count(t.amount) quantity
+   FROM dst_project.ticket_flights t
+   WHERE t.flight_id in
+       (SELECT flight_id
+        FROM flight_ids)
+     AND t.fare_conditions = 'Economy'
+   GROUP BY t.flight_id),
+     business_revenues AS
+  (SELECT t.flight_id,
+          sum(t.amount) amount,
+          count(t.amount) quantity
+   FROM dst_project.ticket_flights t
+   WHERE t.flight_id in
+       (SELECT flight_id
+        FROM flight_ids)
+     AND t.fare_conditions = 'Business'
+   GROUP BY t.flight_id)
+SELECT f.flight_id,
+       f.flight_no,
+       'Anapa' departure_city,
+       ap.city arrival_city,
+       f.scheduled_departure,
+       f.scheduled_arrival,
+       to_char(f.scheduled_arrival - f.scheduled_departure, 'HH24:MI') flight_duration,
+       ac.model aircraft_model,
+       ac.range aircraft_range,
+       ap.longitude,
+       ap.latitude,
+       ac.economy_seats,
+       ac.business_seats,
+       (ac.economy_seats + ac.business_seats) all_seats,
+       er.amount economy_revenue,
+       br.amount business_revenue,
+       (er.amount + br.amount) total_amount,
+       er.quantity economy_quantity,
+       br.quantity business_quantity,
+       (er.quantity + br.quantity) total_quantity
+FROM dst_project.flights f
+JOIN dst_project.airports ap ON ap.airport_code = f.arrival_airport
+JOIN
+  (SELECT a.*,
+          count(DISTINCT s1.seat_no) economy_seats,
+          count(DISTINCT s2.seat_no) business_seats
+   FROM dst_project.aircrafts a
+   LEFT JOIN dst_project.seats s1 ON s1.aircraft_code = a.aircraft_code
+   AND s1.fare_conditions = 'Economy'
+   LEFT JOIN dst_project.seats s2 ON s2.aircraft_code = a.aircraft_code
+   AND s2.fare_conditions = 'Business'
+   GROUP BY a.aircraft_code,
+            a.model,
+            a.range) ac ON ac.aircraft_code = f.aircraft_code
+LEFT JOIN economy_revenues er ON er.flight_id = f.flight_id
+LEFT JOIN business_revenues br ON br.flight_id = f.flight_id
+WHERE f.flight_id in
+    (SELECT flight_id
+     FROM flight_ids)
